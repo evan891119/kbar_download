@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61,<76"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kbar-download"
+version = "0.1.0"
+description = "Resumable read-only Shioaji historical minute-bar downloader"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+live = ["shioaji==1.7.6"]
+
+[project.scripts]
+kbar-download = "kbar_download.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["kbar_download*"]

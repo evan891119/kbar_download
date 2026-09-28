@@ -1,0 +1,16 @@
+{
+  "output_dir": "data",
+  "chunk_days": 7,
+  "reserve_bytes": 52428800,
+  "reserve_ratio": 0.1,
+  "initial_daily_bytes": 1048576,
+  "safety_factor": 2.0,
+  "request_interval_seconds": 1.0,
+  "quota_poll_seconds": 1800,
+  "retry_attempts": 3,
+  "retry_backoff_seconds": 5,
+  "timeout_ms": 30000,
+  "cutoff": null,
+  "start_overrides": {},
+  "confirmed_empty": []
+}
