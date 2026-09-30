@@ -1,5 +1,6 @@
 """Monthly CSV with a recoverable write-ahead transaction and advisory lock."""
 import csv
+import errno
 import hashlib
 import io
 import json
@@ -11,11 +12,18 @@ from pathlib import Path
 from .model import DataError, json_text, market_time
 
 
+WINDOWS = os.name == "nt"
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
 def sync_dir(path):
+    # Windows CRT cannot open directories for fsync. File fsync and the recovery
+    # journal remain mandatory; sudden-power-loss durability differs from POSIX.
+    if WINDOWS:
+        return
     fd = os.open(str(path), os.O_RDONLY)
     try:
         os.fsync(fd)
@@ -58,16 +66,31 @@ class Store:
 
     @contextmanager
     def lock(self):
-        import fcntl
-        with (self.root / ".lock").open("a") as stream:
-            try:
-                fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                raise DataError("另一個下載器正在使用此輸出目錄") from None
-            try:
-                yield
-            finally:
-                fcntl.flock(stream, fcntl.LOCK_UN)
+        with (self.root / ".lock").open("a+b") as stream:
+            if WINDOWS:
+                import msvcrt
+                stream.seek(0)
+                try:
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                except OSError as exc:
+                    if exc.errno in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                        raise DataError("另一個下載器正在使用此輸出目錄") from None
+                    raise
+                try:
+                    yield
+                finally:
+                    stream.seek(0)
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                try:
+                    fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise DataError("另一個下載器正在使用此輸出目錄") from None
+                try:
+                    yield
+                finally:
+                    fcntl.flock(stream, fcntl.LOCK_UN)
 
     def recover(self):
         if not self.journal.exists():
@@ -117,7 +140,7 @@ class Store:
                 stream.flush()
                 os.fsync(stream.fileno())
             sync_dir(target.parent)
-            entries.append({"path": relative, "staged": str(Path(name).relative_to(self.root)),
+            entries.append({"path": relative, "staged": Path(name).relative_to(self.root).as_posix(),
                             "sha256": digest(data)})
         # A crash before this journal leaves only disposable temp files, not committed data.
         atomic_write(self.journal, encoded_json({"files": entries, "state": state}))

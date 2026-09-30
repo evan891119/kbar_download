@@ -101,3 +101,48 @@ data/
 - 不同來源值衝突先保留舊資料並報錯，不靜默覆寫。盤中尾段僅表示當次 API 快照，不承諾發布完成；無每日更新排程。
 
 補充來源：[Contract V2](https://sinotrade.github.io/tutor/contract/)、[Shioaji 1.7.6 wheel](https://pypi.org/project/shioaji/1.7.6/)、[期交所商品名稱代碼](https://www.taifex.com.tw/cht/4/contractName)、[台積電選擇權標的與結算資料](https://www.taifex.com.tw/cht/5/sSOFSP)。
+
+## Windows 10 相容性增補規劃（2026-09-29）
+
+### 目標與本次範圍
+
+新增 Windows 10 原生執行能力，同時保留 Linux／macOS 路徑。已依本規劃實作平台鎖、Windows 落盤分支、可攜式 journal、診斷欄位與 PowerShell 指引。本次不登入 Shioaji、不下載行情、不 commit／push。
+
+暫以 Windows 10 x86-64、64 位元 CPython、PowerShell 與本機 NTFS 資料目錄作為第一個驗收組合；實際 CPU、Python 版本及 Windows build 尚待確認，不先宣稱 32 位元或 Windows ARM 原生相容。Python 版本須與固定的 Shioaji 1.7.6 wheel 一起驗證，暫不因平台支援而升級 SDK。
+
+既有六類商品、自動發現台積電選擇權、期貨僅 R1、完整欄位 CSV、固定截止的一次性回補與額度重置續傳保持不變；不新增 GUI 或每日增量排程。
+
+### 已確認的程式障礙
+
+| 位置 | 實作前行為 | 處理方式 |
+| --- | --- | --- |
+| `storage.py: Store.lock()` | 直接匯入 Unix 專用 `fcntl` | 封裝平台鎖；Windows 使用 `msvcrt.locking`，Linux／macOS 保留 `flock` |
+| `storage.py: sync_dir()` | 以 `os.open` 開啟目錄再 `fsync` | 區分 Windows 與 POSIX 的目錄同步能力，避免 Windows 每次落盤都因目錄開啟失敗中斷 |
+| `storage.py: commit()/recover()` | journal 以平台路徑字串記錄暫存檔 | 新紀錄統一用相對 POSIX 格式；驗證空白、中文路徑與同磁碟替換 |
+| README | 安裝、啟用 venv、輸入憑證範例只有 Bash | 增加 PowerShell 安裝、執行、續傳與安全輸入憑證說明 |
+| 驗證 | 目前測試在 macOS 執行 | 增加平台分支測試，並保留 Windows 10 實機驗收項目 |
+
+### 實作步驟
+
+1. **檔案鎖**：Windows 使用非阻塞 `LK_NBLCK` 鎖定 `.lock` 固定位置的一個位元組，結束時 seek 回同一位置以 `LK_UNLCK` 解鎖。官方允許鎖定區域超過檔案結尾，因此不需要為取得鎖而覆寫檔案。只把鎖衝突轉成「另一個下載器正在使用」；權限／I/O 錯誤不能誤報為鎖衝突。不要刪除鎖檔，以免不同程序鎖到不同檔案。
+2. **原子寫入與恢復**：保留同目錄暫存檔、檔案 flush／fsync、關閉 handle、`os.replace` 與 journal 恢復順序。Windows 若無法使用 POSIX 目錄 fsync，需明確記錄耐久性差異；不能宣稱略過目錄同步便具有完全相同的斷電保證。檔案被 Excel／防毒等占用而替換失敗時，保留恢復材料、回報可理解原因，不標記區段完成、不無限重試。
+3. **路徑與文字**：使用 pathlib、UTF-8、明確 CSV newline；journal 使用可攜式相對路徑。測試含中文／空白的路徑，設定範例說明 Windows JSON 路徑可用 `C:/kbar-data`。初期以本機磁碟驗收，網路磁碟與同步目錄不納入保證。
+4. **PowerShell 指引**：以 `py -3 -m venv .venv` 建立環境，再直接執行 `.\.venv\Scripts\python.exe`，不要求變更 ExecutionPolicy。提供 `pip install ".[live]"`、`doctor`、`status`、離線測試及下載／續傳指令。憑證以不回顯方式輸入，只保留在目前程序所需的環境，不寫入設定檔或命令歷史。
+5. **診斷**：doctor 顯示平台、Python 位元數／架構、SDK 版本與驗證界線；不讀取或顯示金鑰。Windows wheel 缺失或 DLL 載入錯誤要與登入／帳戶錯誤分開說明。
+
+### 驗收順序
+
+- **基準**：先跑既有 25 項離線測試，確認開始改動前狀態。
+- **平台分支**：模擬 Windows 鎖取得／衝突／釋放、非鎖衝突錯誤、目錄同步差異；驗證 journal 格式與中文路徑。模擬測試不等於 Windows 核心行為已驗證。
+- **跨程序與故障**：同目錄第二個程序不能寫入，第一個結束／被終止後可恢復；在暫存、journal、跨月替換、進度更新各階段中斷，重啟不遺失、不重複。檔案占用／磁碟寫入失敗不得推進完成狀態。
+- **Windows 10 實機**：安裝 wheel、匯入 SDK（不登入）、doctor、完整離線測試及假資料端到端回補；記錄 Windows build、架構與 Python 版本。若只在新版 Windows CI 執行，不得稱為 Win10 實測通過。
+- **回歸**：Linux／macOS 離線流程仍通過；真實帳戶下載另行授權，不包含在這份相容性規劃的測試中。
+
+### 來源與驗證界線
+
+- [Python msvcrt 官方文件](https://docs.python.org/3/library/msvcrt.html)：Windows 位元組區域鎖、非阻塞取得與解鎖語義。
+- [Shioaji 1.7.6 發行檔](https://pypi.org/project/shioaji/1.7.6/)：列有 `cp37-abi3-win_amd64` wheel。發行檔存在不等於 Windows 10 目標主機已測試通過。
+
+平台實作已完成，尚未執行 Windows 10 實機測試。後續完成時須分別回報程式改動、離線測試與實機結果。
+
+2026-09-29 本機驗證：31 項離線測試通過，包含 Windows API 分支模擬、檔案占用恢復、中文路徑與本機跨程序鎖釋放；Python 3.8 語法檢查通過。測試主機為 macOS，未做 Win10 實機測試、Shioaji 登入或行情下載。

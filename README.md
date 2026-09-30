@@ -15,7 +15,7 @@ Shioaji 歷史一分鐘 K 棒的一次性回補工具。Python 直接呼叫 SDK�
 
 ## 環境與安裝
 
-目標 **Ubuntu 20.04 是規劃假設，尚未實機驗證**，CPU 架構未知。核心使用 Python 3.8 以上的標準函式庫；Linux/macOS 使用 `fcntl` 目錄鎖，未支援 Windows。SDK 固定 `shioaji==1.7.6`，依據目前 skill 與官方 Contract V2 文件，不使用舊 `api.Contracts`。
+目標 **Ubuntu 20.04 是規劃假設，尚未實機驗證**，CPU 架構未知。核心使用 Python 3.8 以上的標準函式庫；Linux/macOS 使用 `fcntl`，Windows 使用 `msvcrt` 檔案鎖。Windows 10 x86-64 為新增相容目標，尚未實機驗證。SDK 固定 `shioaji==1.7.6`，依據目前 skill 與官方 Contract V2 文件，不使用舊 `api.Contracts`。
 
 2026-09-28 核對 [PyPI 1.7.6](https://pypi.org/project/shioaji/1.7.6/)：套件標示 Python ≥3.7，提供 `cp37-abi3` 的 Linux x86-64（glibc ≥2.17）及 ARM64（glibc ≥2.28）wheel。這是發行檔規格，不是目標主機可執行證明；仍須核對架構、Python、libc、SDK 相依套件及二進位載入。[Ubuntu 官方公告](https://lists.ubuntu.com/archives/ubuntu-announce/2020-April/000256.html) 記載 20.04 預設 Python 3.8。本專案不要求替換系統 Python。
 
@@ -47,6 +47,71 @@ python -m unittest discover -s tests -v
 
 原始碼也能直接 `python3 -m kbar_download doctor`，不需安裝。`doctor` 只列本機版本，**不匯入 SDK、不登入、不讀憑證**。SDK 二進位可另在目標主機以 `python -c 'import shioaji; print("SDK import OK")'` 檢查，仍不代表帳戶 API 可用。
 
+## Windows 10（PowerShell）
+
+先安裝 Git 與 64 位元 CPython（建議以 Python 3.11 作為首輪驗收版本）。目前固定的 Shioaji 1.7.6 在 [PyPI](https://pypi.org/project/shioaji/1.7.6/) 提供 `win_amd64` wheel；不代表已在你的 Win10 驗證，也不保證 32 位元或 ARM 原生執行。
+
+```powershell
+git clone https://github.com/evan891119/kbar_download.git
+cd kbar_download
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install ".[live]"
+.\.venv\Scripts\python.exe -m kbar_download doctor
+Copy-Item config.example.json config.local.json
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+.\.venv\Scripts\python.exe -m kbar_download status --config config.local.json
+```
+
+直接呼叫 venv 的 Python，不需啟用 PowerShell 腳本或修改 ExecutionPolicy。若使用其他相容 Python 版本，調整 `py` 的版本參數。JSON 輸出路徑可填 `C:/kbar-data`；建議先使用本機 NTFS 磁碟，避免同步／網路目錄。
+
+實際下載時以隱藏輸入設定本次程序環境，以下命令會登入並消耗額度：
+
+```powershell
+try {
+    $env:SJ_API_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'API Key' -AsSecureString)).Password
+    $env:SJ_SEC_KEY = [System.Net.NetworkCredential]::new('', (Read-Host 'Secret Key' -AsSecureString)).Password
+    .\.venv\Scripts\python.exe -m kbar_download download --config config.local.json
+} finally {
+    Remove-Item Env:SJ_API_KEY, Env:SJ_SEC_KEY -ErrorAction SilentlyContinue
+}
+```
+
+不要把金鑰貼進命令或設定 JSON。續傳沿用相同命令與輸出目錄，可加 `--no-wait` 或 `--retry-unresolved`。若 CSV 被 Excel 等程式占用，先關閉再重跑；保留 journal 與進度檔，不手動刪除。
+
+Windows 保留檔案 fsync、同目錄替換及 journal 恢復，但不執行 POSIX 目錄 fsync；因此不承諾與 POSIX 相同的突然斷電耐久性。平台分支模擬測試與本機跨程序測試不能替代 Win10 實機驗收。
+
+## 用 .env 保存金鑰（Ubuntu／Windows 共用）
+
+把 `.env.example` 複製成設定 JSON 同目錄的 `.env`，在本機文字編輯器填入：
+
+```dotenv
+SJ_API_KEY=你的APIKey
+SJ_SEC_KEY=你的SecretKey
+```
+
+Ubuntu 首次建立（已有 `.env` 請直接編輯，不要覆蓋）：
+
+```bash
+cp .env.example .env
+chmod 600 .env
+nano .env
+```
+
+PowerShell 使用 `Copy-Item .env.example .env`，再用 `notepad .env` 編輯。不要把真實內容貼到聊天或提交 Git。
+
+存好後，不必每次輸入金鑰：
+
+```bash
+python -m kbar_download download --config config.local.json
+```
+
+Windows 把 `python` 換成 `.\.venv\Scripts\python.exe`。預設只讀設定 JSON 同目錄的 `.env`，不向父目錄搜尋；也可用 `--env-file /path/to/credentials.env` 指定路徑。既有環境變數優先（包含空值），如需改用檔案請先移除舊變數。缺少預設 `.env` 時仍可沿用環境變數。
+
+格式僅支援這兩個欄位、空行、整行 `#` 註解，以及值外圍配對的單／雙引號；不支援 `export`、行尾註解、多行值或變數展開。`$`、`#`、反斜線等值內容保持原樣，不執行任何指令。`.env` 已被 Git 忽略，只有空白 `.env.example` 可提交；自訂檔名／路徑須自行確保不納入 Git。
+
+只有需要登入的 `download` 才讀取憑證；`doctor`、`status` 和已完成且不要求重試的執行都不讀取。憑證不寫入進度或報告。以下互動輸入方式仍可使用。
+
 ## 設定與執行
 
 複製 `config.example.json` 為 `config.local.json`，後者已忽略於 Git。`output_dir` 相對於設定檔所在目錄解析，而不是依目前 shell 位置變動。
@@ -58,7 +123,7 @@ python -m kbar_download status --config config.local.json
 
 `status` 不登入，會驗證既有資料校驗值、恢復未完成落盤交易並重建報告。沒有進度時顯示「尚無進度」。
 
-真正執行前，於目標主機私下設定環境變數 `SJ_API_KEY`、`SJ_SEC_KEY`；工具不自動讀 `.env`，不需要 CA 或交易權限設定。不要將憑證放在命令列參數、設定 JSON、README 或 Git。範例在 Bash 以不回顯方式輸入，不把實際金鑰寫進 shell 歷史：
+真正執行前，於目標主機私下設定環境變數 `SJ_API_KEY`、`SJ_SEC_KEY`；`download` 會自動讀取設定 JSON 同目錄的 `.env`，不需要 CA 或交易權限設定。不要將憑證放在命令列參數、設定 JSON、README 或 Git。範例在 Bash 以不回顯方式輸入，不把實際金鑰寫進 shell 歷史：
 
 ```bash
 read -rsp 'API Key: ' SJ_API_KEY; echo

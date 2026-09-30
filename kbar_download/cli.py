@@ -3,10 +3,12 @@ import argparse
 import json
 import os
 import platform
+import struct
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
+from .envfile import load_credentials
 from .engine import Engine
 from .model import Config, DataError, ProviderError, parse_cutoff
 from .provider import SDK_VERSION, ShioajiProvider
@@ -18,6 +20,7 @@ def main(argv=None):
     parser.add_argument("command", choices=["doctor", "download", "status"],
                         help="doctor/status 離線；download 才登入及使用行情額度")
     parser.add_argument("--config", default="config.example.json")
+    parser.add_argument("--env-file", help="憑證檔；預設為設定 JSON 同目錄的 .env，僅 download 讀取")
     parser.add_argument("--no-wait", action="store_true", help="額度不足保存進度並結束，退出碼 3")
     parser.add_argument("--retry-unresolved", action="store_true", help="只重試未解決／失敗區段，可能消耗流量")
     args = parser.parse_args(argv)
@@ -27,9 +30,10 @@ def main(argv=None):
         except PackageNotFoundError:
             sdk = "未安裝"
         print(json.dumps({"python": platform.python_version(), "system": platform.system(),
-                          "architecture": platform.machine(), "libc": platform.libc_ver(),
+                          "architecture": platform.machine(), "python_bits": struct.calcsize("P") * 8,
+                          "os_release": platform.release(), "os_version": platform.version(), "libc": platform.libc_ver(),
                           "shioaji_installed": sdk, "shioaji_expected": SDK_VERSION,
-                          "note": "僅本機資訊；未登入、未驗證目標 Ubuntu 或 SDK 二進位可載入。"},
+                          "note": "僅本機資訊；未登入、未驗證目標 Ubuntu／Windows 10 或 SDK 二進位可載入。"},
                          ensure_ascii=False, indent=2))
         return 0
     provider = None
@@ -62,7 +66,11 @@ def main(argv=None):
                 print("本次回補已結束，未登入；未解決區段可用 --retry-unresolved 重試。")
                 return 2 if any(j["status"] not in ("done", "confirmed_empty") for j in state["jobs"]) or state["discovery_issues"] or not state["files"] else 0
             print("輸出：{}。download 將登入並消耗行情額度。".format(store.root))
-            provider = ShioajiProvider.connect(cfg.timeout_ms, cfg.request_interval_seconds)
+            env_path = Path(args.env_file) if args.env_file else Path(args.config).resolve().parent / ".env"
+            credentials = load_credentials(env_path)
+            if args.env_file and not env_path.is_file():
+                raise DataError("指定的憑證檔不存在")
+            provider = ShioajiProvider.connect(cfg.timeout_ms, cfg.request_interval_seconds, credentials=credentials)
             engine = Engine(cfg, provider, store, wait_quota=not args.no_wait,
                             retry_unresolved=args.retry_unresolved)
             code = engine.run()
@@ -74,6 +82,9 @@ def main(argv=None):
         return 130
     except (DataError, ProviderError) as exc:
         print("停止：{}".format(exc), file=sys.stderr)
+        return 2
+    except PermissionError:
+        print("停止：檔案權限不足或被其他程式占用；請關閉占用程式後重跑，保留原有進度與 journal。", file=sys.stderr)
         return 2
     except (ValueError, TypeError, OSError, KeyError, PackageNotFoundError):
         # No arbitrary exception text/traceback: avoid leaking data from SDK or local config.

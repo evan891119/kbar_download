@@ -38,12 +38,13 @@ class ShioajiProvider:
         self.last_call = 0.0
 
     @classmethod
-    def connect(cls, timeout_ms=30000, interval=1.0):
+    def connect(cls, timeout_ms=30000, interval=1.0, credentials=None):
         # Only invoked by the explicit `download` command, never by status/doctor/tests.
         if version("shioaji") != SDK_VERSION:
             raise ProviderError("sdk_version_mismatch")
         import shioaji
-        key, secret = os.environ.get("SJ_API_KEY"), os.environ.get("SJ_SEC_KEY")
+        credentials = os.environ if credentials is None else credentials
+        key, secret = credentials.get("SJ_API_KEY"), credentials.get("SJ_SEC_KEY")
         if not key or not secret:
             raise ProviderError("missing_credentials")
         api = shioaji.Shioaji(simulation=False)
