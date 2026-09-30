@@ -11,9 +11,45 @@ SDK_VERSION = "1.7.6"
 HISTORY_LIMIT = "當前商品清單不包含所有已到期契約；不得據此宣稱選擇權全歷史完整。"
 
 
+# Names from the pinned SDK's exception declarations. Only literal allowlisted
+# labels may be displayed; arbitrary class names can also contain private data.
+LOGIN_ERROR_TYPES = {
+    "AuthError": "authentication", "TokenError": "authentication",
+    "SystemMaintenance": "maintenance", "ServerError": "server",
+    "ValidationError": "request_validation", "BadRequestError": "request_validation",
+    "CaError": "certificate", "CaExpiredError": "certificate",
+    "CaPasswordError": "certificate", "AccountNotSignError": "account_signing",
+    "SubscribeError": "subscription", "UnsubscribeError": "subscription",
+    "ResponseError": "response", "DecodeError": "response_decode",
+    "ResponseMsgError": "response_message", "ResponseRecvError": "response_closed",
+    "ShioajiConnectionError": "connection", "ShioajiTimeoutError": "timeout",
+    "ShioajiValueError": "value", "ShioajiTypeError": "argument_type",
+    "AccountNotProvideError": "account_missing", "ShioajiPermissionError": "permission",
+    "ShioajiError": "unknown",
+}
+
+
+def login_error_type(error):
+    for cls in type(error).__mro__:
+        if cls.__module__.startswith("shioaji") and cls.__name__ in LOGIN_ERROR_TYPES:
+            return cls.__name__, LOGIN_ERROR_TYPES[cls.__name__]
+    for cls, category in ((TimeoutError, "timeout"), (ConnectionError, "connection"),
+                          (PermissionError, "permission"), (TypeError, "argument_type"),
+                          (ValueError, "value"), (OSError, "os_error"),
+                          (RuntimeError, "unknown"), (Exception, "unknown")):
+        if isinstance(error, cls):
+            return cls.__name__, category
+    return "Exception", "unknown"
+
+
 def login_diagnostic(error, elapsed):
     """Return fixed diagnostic labels only; never echo SDK text or attributes."""
-    message = str(error).lower()
+    error_type, category = login_error_type(error)
+    try:
+        message = str(error).lower()
+    except Exception:
+        message = ""
+
     if isinstance(error, TimeoutError) or any(word in message for word in
                                              ("timeout", "timed out", "deadline exceeded")):
         hint = "timeout；請檢查網路連線與主機時間"
@@ -27,8 +63,11 @@ def login_diagnostic(error, elapsed):
     elif any(word in message for word in ("unauthorized", "invalid api key", "invalid secret", "authentication failed")):
         hint = "authentication；請檢查憑證與 API 存取設定"
     else:
-        hint = "unknown；SDK 未提供可安全辨識的原因"
-    return "login_failed（線索={}；登入耗時={:.1f}s；線索不代表已確認根因）".format(hint, elapsed)
+        hint = category
+        if category == "unknown":
+            hint += "；目前規則無法辨識原因，並非 SDK 沒有錯誤訊息"
+    return "login_failed（線索={}；例外類型={}；登入耗時={:.1f}s；線索不代表已確認根因）".format(
+        hint, error_type, elapsed)
 
 
 def scalar(value):

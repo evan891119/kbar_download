@@ -84,3 +84,28 @@ class LoginDiagnosticTests(unittest.TestCase):
         self.assertNotIn('private-', str(caught.exception))
         api.login.assert_called_once()
         api.logout.assert_called_once()
+
+
+    def test_sdk_types_without_recognizable_message(self):
+        from kbar_download.provider import LOGIN_ERROR_TYPES, login_diagnostic
+        for name, category in LOGIN_ERROR_TYPES.items():
+            error_type = type(name, (Exception,), {'__module__': 'shioaji._core'})
+            result = login_diagnostic(error_type('private-secret'), 0.1)
+            self.assertIn('例外類型=' + name, result)
+            self.assertIn('線索=' + category, result)
+            self.assertNotIn('private-secret', result)
+
+    def test_unknown_class_names_and_broken_messages_are_not_exposed(self):
+        from kbar_download.provider import login_diagnostic
+        private_type = type('private-secret', (ValueError,), {})
+        result = login_diagnostic(private_type('private-secret'), 0.1)
+        self.assertIn('例外類型=ValueError', result)
+        self.assertNotIn('private-secret', result)
+
+        class BrokenMessage(Exception):
+            def __str__(self):
+                raise ValueError('private-secret')
+
+        result = login_diagnostic(BrokenMessage(), 0.1)
+        self.assertIn('線索=unknown', result)
+        self.assertNotIn('private-secret', result)

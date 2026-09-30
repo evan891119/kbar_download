@@ -225,6 +225,9 @@ data/
 `login_failed` 現在附上登入耗時與固定分類線索，例如 `線索=timeout`、
 `connection`、`clock`、`rate_limit`、`authentication` 或 `unknown`。
 分類依例外類型或訊息關鍵字判斷，只供排查，不代表已確認根因；
-`unknown` 不表示憑證一定錯誤。工具不輸出原始例外、API key、secret 或帳戶資訊，
+`unknown` 不表示憑證一定錯誤，也不表示 SDK 沒有錯誤訊息。
+診斷同時提供允許清單中的 SDK 例外類型（如 `TokenError`、`ResponseRecvError`），
+或 Python 基底例外類型（如 `TypeError`）；未知自訂類別名稱不會輸出。
+新增類型線索包括伺服器維護、回應通道關閉、資料解碼、參數與權限錯誤。工具不輸出原始例外、API key、secret 或帳戶資訊，
 也不自動重試登入。此保護只涵蓋工具產生的診斷，SDK 自身的日誌不在此範圍。
 若需回報問題，提供工具的 `停止：login_failed（…）` 一行即可，不要附 `.env`。
