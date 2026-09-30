@@ -7,7 +7,7 @@ from importlib.metadata import version
 
 from .model import Contract, ProviderError
 
-SDK_VERSION = "1.7.6"
+SDK_VERSION = "1.7.7"
 HISTORY_LIMIT = "當前商品清單不包含所有已到期契約；不得據此宣稱選擇權全歷史完整。"
 
 

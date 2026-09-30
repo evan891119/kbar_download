@@ -10,7 +10,7 @@ requires-python = ">=3.8"
 dependencies = []
 
 [project.optional-dependencies]
-live = ["shioaji==1.7.6"]
+live = ["shioaji==1.7.7"]
 
 [project.scripts]
 kbar-download = "kbar_download.cli:main"

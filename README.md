@@ -15,9 +15,9 @@ Shioaji 歷史一分鐘 K 棒的一次性回補工具。Python 直接呼叫 SDK�
 
 ## 環境與安裝
 
-目標 **Ubuntu 20.04 是規劃假設，尚未實機驗證**，CPU 架構未知。核心使用 Python 3.8 以上的標準函式庫；Linux/macOS 使用 `fcntl`，Windows 使用 `msvcrt` 檔案鎖。Windows 10 x86-64 為新增相容目標，尚未實機驗證。SDK 固定 `shioaji==1.7.6`，依據目前 skill 與官方 Contract V2 文件，不使用舊 `api.Contracts`。
+目標 **Ubuntu 20.04 是規劃假設，尚未實機驗證**，CPU 架構未知。核心使用 Python 3.8 以上的標準函式庫；Linux/macOS 使用 `fcntl`，Windows 使用 `msvcrt` 檔案鎖。Windows 10 x86-64 為新增相容目標，尚未實機驗證。SDK 固定 `shioaji==1.7.7`，依據目前 skill 與官方 Contract V2 文件，不使用舊 `api.Contracts`。
 
-2026-09-28 核對 [PyPI 1.7.6](https://pypi.org/project/shioaji/1.7.6/)：套件標示 Python ≥3.7，提供 `cp37-abi3` 的 Linux x86-64（glibc ≥2.17）及 ARM64（glibc ≥2.28）wheel。這是發行檔規格，不是目標主機可執行證明；仍須核對架構、Python、libc、SDK 相依套件及二進位載入。[Ubuntu 官方公告](https://lists.ubuntu.com/archives/ubuntu-announce/2020-April/000256.html) 記載 20.04 預設 Python 3.8。本專案不要求替換系統 Python。
+2026-10-01 核對 [PyPI 1.7.7](https://pypi.org/project/shioaji/1.7.7/)：套件標示 Python ≥3.7，提供 `cp37-abi3` 的 Linux x86-64（glibc ≥2.17）及 ARM64（glibc ≥2.28）wheel。這是發行檔規格，不是目標主機可執行證明；仍須核對架構、Python、libc、SDK 相依套件及二進位載入。[Ubuntu 官方公告](https://lists.ubuntu.com/archives/ubuntu-announce/2020-April/000256.html) 記載 20.04 預設 Python 3.8。本專案不要求替換系統 Python。
 
 公開儲存庫可直接透過 HTTPS clone，不需要 GitHub 登入或 SSH key。在 Ubuntu 終端機執行：
 
@@ -49,7 +49,7 @@ python -m unittest discover -s tests -v
 
 ## Windows 10（PowerShell）
 
-先安裝 Git 與 64 位元 CPython（建議以 Python 3.11 作為首輪驗收版本）。目前固定的 Shioaji 1.7.6 在 [PyPI](https://pypi.org/project/shioaji/1.7.6/) 提供 `win_amd64` wheel；不代表已在你的 Win10 驗證，也不保證 32 位元或 ARM 原生執行。
+先安裝 Git 與 64 位元 CPython（建議以 Python 3.11 作為首輪驗收版本）。目前固定的 Shioaji 1.7.7 在 [PyPI](https://pypi.org/project/shioaji/1.7.7/) 提供 `win_amd64` wheel；不代表已在你的 Win10 驗證，也不保證 32 位元或 ARM 原生執行。
 
 ```powershell
 git clone https://github.com/evan891119/kbar_download.git
@@ -231,3 +231,19 @@ data/
 新增類型線索包括伺服器維護、回應通道關閉、資料解碼、參數與權限錯誤。工具不輸出原始例外、API key、secret 或帳戶資訊，
 也不自動重試登入。此保護只涵蓋工具產生的診斷，SDK 自身的日誌不在此範圍。
 若需回報問題，提供工具的 `停止：login_failed（…）` 一行即可，不要附 `.env`。
+
+### 從 Shioaji 1.7.6 升級
+
+2026-10-01 將依賴與執行時版本檢查同步升至 `1.7.7`。
+[官方 PyPI](https://pypi.org/project/shioaji/1.7.7/) 已撤回 `1.7.6`，
+原因涉及快取登入與訂閱狀態；這不代表已確認本次 HTTP 400 的根因。
+在已啟用的虛擬環境、更新專案後執行：
+
+```bash
+python -m pip install --upgrade '.[live]'
+python -m kbar_download doctor
+python -m kbar_download download --config config.local.json --env-file .env
+```
+
+`doctor` 的 installed 與 expected 應皆為 `1.7.7`。
+升級不需要更改 `.env` 或刪除既有下載進度；實際登入結果仍須目標主機驗證。
