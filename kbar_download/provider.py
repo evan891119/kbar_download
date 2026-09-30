@@ -11,6 +11,26 @@ SDK_VERSION = "1.7.6"
 HISTORY_LIMIT = "當前商品清單不包含所有已到期契約；不得據此宣稱選擇權全歷史完整。"
 
 
+def login_diagnostic(error, elapsed):
+    """Return fixed diagnostic labels only; never echo SDK text or attributes."""
+    message = str(error).lower()
+    if isinstance(error, TimeoutError) or any(word in message for word in
+                                             ("timeout", "timed out", "deadline exceeded")):
+        hint = "timeout；請檢查網路連線與主機時間"
+    elif isinstance(error, ConnectionError) or any(word in message for word in
+            ("connection refused", "name resolution", "network unreachable", "dns")):
+        hint = "connection；請檢查 DNS、網路與防火牆"
+    elif any(word in message for word in ("receive_window", "timestamp", "clock skew")):
+        hint = "clock；請檢查主機時間同步"
+    elif any(word in message for word in ("too many", "rate limit", "1分鐘後")):
+        hint = "rate_limit；請停止連續登入並稍後再試"
+    elif any(word in message for word in ("unauthorized", "invalid api key", "invalid secret", "authentication failed")):
+        hint = "authentication；請檢查憑證與 API 存取設定"
+    else:
+        hint = "unknown；SDK 未提供可安全辨識的原因"
+    return "login_failed（線索={}；登入耗時={:.1f}s；線索不代表已確認根因）".format(hint, elapsed)
+
+
 def scalar(value):
     if isinstance(value, Enum) or isinstance(getattr(value, "value", None), str):
         return value.value
@@ -48,14 +68,16 @@ class ShioajiProvider:
         if not key or not secret:
             raise ProviderError("missing_credentials")
         api = shioaji.Shioaji(simulation=False)
+        started = time.monotonic()
         try:
             api.login(api_key=key, secret_key=secret, subscribe_trade=False)
-        except Exception:
+        except Exception as error:
+            diagnostic = login_diagnostic(error, time.monotonic() - started)
             try:
                 api.logout()
             except Exception:
                 pass
-            raise ProviderError("login_failed") from None
+            raise ProviderError(diagnostic) from None
         return cls(api, timeout_ms, interval)
 
     def call(self, operation, *args, **kwargs):

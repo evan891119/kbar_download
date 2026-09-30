@@ -219,3 +219,12 @@ data/
 - [Contract V2](https://sinotrade.github.io/tutor/contract/)：`get`、`info`、`futures_by_underlying`、`option_roots`、`options`。
 - [期交所商品代碼](https://www.taifex.com.tw/cht/4/contractName)、[股票選擇權結算資料](https://www.taifex.com.tw/cht/5/sSOFSP)：台積電產品、標的 2330 與調整契約；實際下載清單仍由 SDK 查證。
 - [期交所 2024 年 8 月雙月刊](https://www.taifex.com.tw/file/taifex/CHINESE/10/moth_all/202408_all.pdf)：微型臺指期貨 2024-07-29 上市，作為微台 R1 候選查詢下限，並非保證 API 自該日有資料。
+
+### 登入失敗診斷
+
+`login_failed` 現在附上登入耗時與固定分類線索，例如 `線索=timeout`、
+`connection`、`clock`、`rate_limit`、`authentication` 或 `unknown`。
+分類依例外類型或訊息關鍵字判斷，只供排查，不代表已確認根因；
+`unknown` 不表示憑證一定錯誤。工具不輸出原始例外、API key、secret 或帳戶資訊，
+也不自動重試登入。此保護只涵蓋工具產生的診斷，SDK 自身的日誌不在此範圍。
+若需回報問題，提供工具的 `停止：login_failed（…）` 一行即可，不要附 `.env`。

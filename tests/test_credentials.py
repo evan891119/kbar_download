@@ -45,3 +45,42 @@ class CredentialTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()):
                 self.assertEqual(main(['doctor']), 0)
                 self.assertEqual(main(['status', '--config', str(config)]), 0)
+
+
+class LoginDiagnosticTests(unittest.TestCase):
+    def test_fixed_hints_never_echo_sensitive_exception_text(self):
+        from kbar_download.provider import login_diagnostic
+        for error, expected in [
+            (TimeoutError('private-key private-secret'), 'timeout'),
+            (ConnectionError('private-key private-secret'), 'connection'),
+            (RuntimeError('timestamp private-key private-secret'), 'clock'),
+            (RuntimeError('rate limit private-key private-secret'), 'rate_limit'),
+            (RuntimeError('invalid api key private-key private-secret'), 'authentication'),
+            (RuntimeError('private-key private-secret account=123 token=abc'), 'unknown'),
+        ]:
+            with self.subTest(expected=expected):
+                result = login_diagnostic(error, 30.125)
+                self.assertIn('線索=' + expected, result)
+                self.assertIn('30.1s', result)
+                for sensitive in ('private-key', 'private-secret', '123', 'abc'):
+                    self.assertNotIn(sensitive, result)
+
+    def test_connect_preserves_diagnostic_when_logout_also_fails(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from kbar_download.provider import ShioajiProvider, SDK_VERSION
+        from kbar_download.model import ProviderError
+        api = Mock()
+        api.login.side_effect = TimeoutError('private-key private-secret')
+        api.logout.side_effect = RuntimeError('private-secret')
+        sdk = SimpleNamespace(Shioaji=Mock(return_value=api))
+        with patch.dict('sys.modules', {'shioaji': sdk}), \
+                patch('kbar_download.provider.version', return_value=SDK_VERSION), \
+                patch('kbar_download.provider.time.monotonic', side_effect=[10, 40]):
+            with self.assertRaises(ProviderError) as caught:
+                ShioajiProvider.connect(credentials={'SJ_API_KEY': 'private-key', 'SJ_SEC_KEY': 'private-secret'})
+        self.assertIn('線索=timeout', str(caught.exception))
+        self.assertIn('30.0s', str(caught.exception))
+        self.assertNotIn('private-', str(caught.exception))
+        api.login.assert_called_once()
+        api.logout.assert_called_once()
