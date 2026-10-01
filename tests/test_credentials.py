@@ -82,6 +82,7 @@ class LoginDiagnosticTests(unittest.TestCase):
         self.assertIn('線索=timeout', str(caught.exception))
         self.assertIn('30.0s', str(caught.exception))
         self.assertNotIn('private-', str(caught.exception))
+        sdk.Shioaji.assert_called_once_with(simulation=True)
         api.login.assert_called_once()
         api.logout.assert_called_once()
 

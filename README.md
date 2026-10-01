@@ -133,7 +133,7 @@ python -m kbar_download download --config config.local.json
 unset SJ_API_KEY SJ_SEC_KEY
 ```
 
-**只有 `download` 會登入正式行情環境並使用帳戶額度。** 首次在目標主機先做小範圍驗收，不要直接啟動多年下載。可用 `start_overrides` 為六個類別設定較近日期（必須是已過去日期），使用獨立輸出目錄；這種執行在報告中標明不涵蓋全歷史。類別鍵為 `txf`、`mxf`、`tmf`、`tsmc_stock`、`tsmc_future`、`tsmc_option`。
+**只有 `download` 會以 `simulation=True` 登入並使用行情額度。** 首次在目標主機先做小範圍驗收，不要直接啟動多年下載。可用 `start_overrides` 為六個類別設定較近日期（必須是已過去日期），使用獨立輸出目錄；這種執行在報告中標明不涵蓋全歷史。類別鍵為 `txf`、`mxf`、`tmf`、`tsmc_stock`、`tsmc_future`、`tsmc_option`。
 
 正常續傳重跑相同命令、相同設定與輸出目錄即可。已完成的區段不重新查；已結束且未要求重試的執行不登入。可用 Ctrl-C 停止，下次先恢復未完成檔案交易。
 
@@ -247,3 +247,11 @@ python -m kbar_download download --config config.local.json --env-file .env
 
 `doctor` 的 installed 與 expected 應皆為 `1.7.7`。
 升級不需要更改 `.env` 或刪除既有下載進度；實際登入結果仍須目標主機驗證。
+
+
+### 行情下載的登入模式
+
+工具固定使用 `simulation=True`，不要求 token 具備 production 登入權限。
+[官方模擬環境文件](https://sinotrade.github.io/tutor/simulation/) 列出 `kbars`、`ticks`、`snapshots` 可用。
+工具只查詢行情，不下單；商品可用性、歷史涵蓋與額度仍以 API 實際回傳為準。
+不需修改 `.env`，也不需刪除既有進度。

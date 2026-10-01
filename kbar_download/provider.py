@@ -106,7 +106,8 @@ class ShioajiProvider:
         key, secret = credentials.get("SJ_API_KEY"), credentials.get("SJ_SEC_KEY")
         if not key or not secret:
             raise ProviderError("missing_credentials")
-        api = shioaji.Shioaji(simulation=False)
+        # Historical market data is supported in simulation mode.
+        api = shioaji.Shioaji(simulation=True)
         started = time.monotonic()
         try:
             api.login(api_key=key, secret_key=secret, subscribe_trade=False)
